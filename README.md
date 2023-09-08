@@ -89,7 +89,7 @@ This is my scripts just for reference:
 
 > cd ./videocomposer-TensorRT/VideoProcessingFramework
 > 
-> # or git clone from here, git clone https://github.com/NVIDIA/VideoProcessingFramework
+> #or git clone from here, git clone https://github.com/NVIDIA/VideoProcessingFramework
 > 
 > cd ./VideoProcessingFramework
 > 
