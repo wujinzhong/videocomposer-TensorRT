@@ -158,3 +158,5 @@ Reference https://github.com/damo-vilab/videocomposer to load pretrained models 
 please check the profiling/optimizing document for details, https://github.com/wujinzhong/videocomposer-TensorRT/blob/main/Videocomposer%20Pipeline%20Inference%20Performance%20Optimizing%20Project%20Overview.pdf.
 
 In summary, we got 2.5X~3X speed up for AI models converting to TensorRT_fp16; VPF is of very high performance than CPU implementation video encoding, we use GPU hardware encoded H264 to replace original imageio CPU implementation.
+![image](https://github.com/wujinzhong/videocomposer-TensorRT/assets/52945455/0d3ede7b-4416-473d-b43d-b9e32a074102)
+![image](https://github.com/wujinzhong/videocomposer-TensorRT/assets/52945455/22af365e-0386-439c-af08-c4e8fcd8aa86)
