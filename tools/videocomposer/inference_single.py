@@ -54,8 +54,8 @@ from tools.annotator.sketch import pidinet_bsd, sketch_simplification_gan
 from utils.config import Config
 import nvtx
 import warnings
-import trt_util_2
-from trt_util_2 import (Memory_Manager, 
+import InferenceUtil
+from InferenceUtil import (Memory_Manager, 
                         check_onnx,
                         TRT_Engine)
 
@@ -507,7 +507,7 @@ def worker(gpu, cfg):
     frame_style = None
     if cfg.read_style:
         frame_style = Image.open(open(cfg.style_image, mode='rb')).convert('RGB')
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     memory_manager.add_foot_print("read images")
     nvtx.end_range(rng)
     rng = nvtx.start_range(message="generators", color="blue")
@@ -567,7 +567,7 @@ def worker(gpu, cfg):
     
     # Placeholder for color inference
     palette = None
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     memory_manager.add_foot_print("sketch model")
     nvtx.end_range(rng)
     rng = nvtx.start_range(message="auotoencoder", color="blue")
@@ -630,7 +630,7 @@ def worker(gpu, cfg):
         logging.info("Other model type not implement, exist")
         raise NotImplementedError(f"The model {cfg.network_name} not implement")
         return 
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     memory_manager.add_foot_print("UNet model")
     nvtx.end_range(rng)
     rng = nvtx.start_range(message="checkpoint", color="blue")
@@ -656,7 +656,7 @@ def worker(gpu, cfg):
     # mark model size
     if cfg.rank == 0:
         logging.info(f'Created a model with {int(sum(p.numel() for p in model.parameters()) / (1024 ** 2))}M parameters')
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     memory_manager.add_foot_print("checkpoint")
     nvtx.end_range(rng)
     rng = nvtx.start_range(message="diffusion", color="blue")
@@ -668,7 +668,7 @@ def worker(gpu, cfg):
         var_type=cfg.var_type,
         loss_type=cfg.loss_type,
         rescale_timesteps=False)
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     nvtx.end_range(rng)
     memory_manager.add_foot_print("difussion model")
     # global variables
@@ -698,7 +698,7 @@ def worker(gpu, cfg):
                     mv_data_video = []
                     if 'motion' in cfg.video_compositions:
                         mv_data_video = rearrange(mv_data, 'b f c h w -> b c f h w')
-                    trt_util_2.synchronize( torch_stream )
+                    InferenceUtil.synchronize( torch_stream )
                     nvtx.end_range(rng)
                     rng = nvtx.start_range(message="mask", color="red")
                     ### mask images
@@ -706,7 +706,7 @@ def worker(gpu, cfg):
                     if 'mask' in cfg.video_compositions:
                         masked_video = make_masked_images(misc_data.sub(0.5).div_(0.5), mask)
                         masked_video = rearrange(masked_video, 'b f c h w -> b c f h w')
-                    trt_util_2.synchronize( torch_stream )
+                    InferenceUtil.synchronize( torch_stream )
                     nvtx.end_range(rng)
                     rng = nvtx.start_range(message="local_image", color="red")
                     ### Single Image
@@ -719,7 +719,7 @@ def worker(gpu, cfg):
                         else:
                             image_local = misc_data[:,:1].clone().repeat(1,frames_num,1,1,1)
                         image_local = rearrange(image_local, 'b f c h w -> b c f h w', b = bs_vd_local)
-                    trt_util_2.synchronize( torch_stream )
+                    InferenceUtil.synchronize( torch_stream )
                     nvtx.end_range(rng)
                     rng = nvtx.start_range(message="encode", color="red")
                     ### encode the video_data
@@ -743,7 +743,7 @@ def worker(gpu, cfg):
                                                                                            outputs = __autoencoder_encode_trt_engine.output_tensors)
                                 assert encoder_output is None
                                 moments = __autoencoder_encode_trt_engine.output_tensors[0].to(torch.float16)
-                                trt_util_2.synchronize( torch_stream )
+                                InferenceUtil.synchronize( torch_stream )
                                 nvtx.end_range(nvtx_trt)
                             else:
                                 moments = autoencoder.encode(vd_data)
@@ -751,12 +751,12 @@ def worker(gpu, cfg):
                             encoder_posterior = DiagonalGaussianDistribution(moments)
                             tmp = get_first_stage_encoding(encoder_posterior).detach()
                             decode_data.append(tmp)
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng_autoencoder)
                         video_data = torch.cat(decode_data,dim=0)
                         video_data = rearrange(video_data, '(b f) c h w -> b c f h w', b = bs_vd)
                         
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng)
                         rng = nvtx.start_range(message="depthmap", color="red")
                         depth_data = []
@@ -766,14 +766,14 @@ def worker(gpu, cfg):
                                 
                                 #--------------------------------
                                 if __midas_trt_engine:
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                     nvtx_trt = nvtx.start_range(message='midas', color='red')
                                     #inputs/outpus of midas/trt are all fp32
                                     midas_output = __midas_trt_engine.inference(inputs=[midas_input.to(torch.float32)],
                                                                                             outputs = __midas_trt_engine.output_tensors)
                                     assert midas_output is None
                                     depth = __midas_trt_engine.output_tensors[0].to(torch.float16)
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                     nvtx.end_range(nvtx_trt)
                                 else:
                                     depth = midas(midas_input)
@@ -784,7 +784,7 @@ def worker(gpu, cfg):
                                 depth_data.append(depth)
                             depth_data = torch.cat(depth_data, dim = 0)
                             depth_data = rearrange(depth_data, '(b f) c h w -> b c f h w', b = bs_vd)
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng)
                         rng = nvtx.start_range(message="canny", color="red")
                         canny_data = []
@@ -797,7 +797,7 @@ def worker(gpu, cfg):
                                 canny_data.append(canny_condition)
                             canny_data = torch.cat(canny_data, dim = 0)
                             canny_data = rearrange(canny_data, '(b f) c h w -> b c f h w', b = bs_vd)
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng)
                         rng = nvtx.start_range(message="sketch", color="red")
                         sketch_data = []
@@ -810,49 +810,49 @@ def worker(gpu, cfg):
                             for misc_imgs in sketch_list:
                                 pidinet_input = misc_imgs.sub(pidi_mean).div_(pidi_std)
                                 
-                                trt_util_2.synchronize( torch_stream )
+                                InferenceUtil.synchronize( torch_stream )
                                 rng_ = nvtx.start_range(message="pidinet", color="red")
 
                                 if __pidinet_trt_engine:
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                     #inputs/outpus of pidinet/trt are all fp32
                                     pidinet_output = __pidinet_trt_engine.inference(inputs=[pidinet_input.to(torch.float32)],
                                                                                             outputs = __pidinet_trt_engine.output_tensors)
                                     assert pidinet_output is None
                                     sketch = __pidinet_trt_engine.output_tensors[0].to(torch.float16)
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                 else:
                                     sketch = pidinet(pidinet_input)
                                 
-                                trt_util_2.synchronize( torch_stream )
+                                InferenceUtil.synchronize( torch_stream )
                                 nvtx.end_range(rng_)
                                 rng_ = nvtx.start_range(message="cleaner", color="red")
                                 cleaner_input = 1.0 - sketch
                                 
                                 if __cleaner_trt_engine:
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                     #inputs/outpus of cleaner/trt are all fp32
                                     cleaner_output = __cleaner_trt_engine.inference(inputs=[cleaner_input.to(torch.float32)],
                                                                                             outputs = __cleaner_trt_engine.output_tensors)
                                     assert cleaner_output is None
                                     sketch = __cleaner_trt_engine.output_tensors[0].to(torch.float16)
-                                    trt_util_2.synchronize( torch_stream )
+                                    InferenceUtil.synchronize( torch_stream )
                                 else:
                                     sketch = 1.0 - cleaner(cleaner_input)
                                 
-                                trt_util_2.synchronize( torch_stream )
+                                InferenceUtil.synchronize( torch_stream )
                                 nvtx.end_range(rng_)
 
                                 sketch_data.append(sketch)
                             sketch_data = torch.cat(sketch_data, dim = 0)
                             sketch_data = rearrange(sketch_data, '(b f) c h w -> b c f h w', b = bs_vd)
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng)
                         rng = nvtx.start_range(message="single_sketch", color="red")
                         single_sketch_data = []
                         if 'single_sketch' in cfg.video_compositions:
                             single_sketch_data = sketch_data.clone()[:, :, :1].repeat(1, 1, frames_num, 1, 1)
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng)
 
                     # preprocess for input text descripts
@@ -870,7 +870,7 @@ def worker(gpu, cfg):
                                 ref_imgs = ref_imgs.squeeze(1)
                                 y_visual = clip_encoder_visual(ref_imgs).unsqueeze(1) # [1, 1, 1024]
                                 y_visual0 = y_visual.clone()
-                    trt_util_2.synchronize( torch_stream )
+                    InferenceUtil.synchronize( torch_stream )
                     nvtx.end_range(rng)
                     
                     with torch.no_grad():
@@ -922,7 +922,7 @@ def worker(gpu, cfg):
                             model_kwargs = prepare_model_kwargs(partial_keys = partial_keys,
                                                     full_model_kwargs = full_model_kwargs,
                                                     use_fps_condition = cfg.use_fps_condition)
-                            trt_util_2.synchronize( torch_stream )
+                            InferenceUtil.synchronize( torch_stream )
                             nvtx.end_range(rng)
                             rng = nvtx.start_range(message="ddim_sample_loop", color="red")
                             video_output = diffusion.ddim_sample_loop(
@@ -933,7 +933,7 @@ def worker(gpu, cfg):
                                 ddim_timesteps=cfg.ddim_timesteps,
                                 eta=0.0,
                                 torch_stream=torch_stream)
-                            trt_util_2.synchronize( torch_stream )
+                            InferenceUtil.synchronize( torch_stream )
                             nvtx.end_range(rng)
                             rng = nvtx.start_range(message="visualize_with_model_kwargs", color="red")
                             
@@ -952,15 +952,15 @@ def worker(gpu, cfg):
                                 autoencoder_decode_trt_engine = __autoencoder_decode_trt_engine,
                                 autoencoder_decode_trt_engine_outputs = __autoencoder_decode_trt_engine.output_tensors if __autoencoder_decode_trt_engine else None,
                                 testIdx = I )
-                            trt_util_2.synchronize( torch_stream )
+                            InferenceUtil.synchronize( torch_stream )
                             nvtx.end_range(rng)
                             #--------------------------------------
-                        trt_util_2.synchronize( torch_stream )
+                        InferenceUtil.synchronize( torch_stream )
                         nvtx.end_range(rng_ddim)
-                    trt_util_2.synchronize( torch_stream )
+                    InferenceUtil.synchronize( torch_stream )
                     torch.cuda.synchronize()
                     memory_manager.add_foot_print(f"for{step}")
-        trt_util_2.synchronize( torch_stream )
+        InferenceUtil.synchronize( torch_stream )
         nvtx.end_range(rng_for)
     memory_manager.summary()
 
@@ -1015,7 +1015,7 @@ def visualize_with_model_kwargs(model_kwargs,
     video_data_list = torch.chunk(video_data, video_data.shape[0]//chunk_size, dim=0)
     decode_data = []
 
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     rng = nvtx.start_range(message="autoencoder.decode", color="blue")
     for vd_data in video_data_list:
         #print(f"autoencoder.decode, vd_data: {vd_data.device, vd_data.shape, vd_data.dtype}") #vd_data: (device(type='cuda', index=0), torch.Size([1, 3, 256, 256]), torch.float32)
@@ -1026,14 +1026,14 @@ def visualize_with_model_kwargs(model_kwargs,
                                             outputs = autoencoder_decode_trt_engine_outputs)
             assert unet_output is None
             tmp = autoencoder_decode_trt_engine_outputs[0].to(torch.float16)
-            trt_util_2.synchronize( torch_stream )
+            InferenceUtil.synchronize( torch_stream )
             nvtx.end_range(nvtx_trt)
         else:
             tmp = autoencoder.decode(vd_data).to(torch.device('cuda'))
         #print(f"output autoencoder.decode, tmp: {tmp.device, tmp.shape, tmp.dtype}")
         
         decode_data.append(tmp)
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     nvtx.end_range(rng)
     video_data = torch.cat(decode_data,dim=0)
     video_data = rearrange(video_data, '(b f) c h w -> b c f h w', b = bs_vd)
@@ -1079,7 +1079,7 @@ def visualize_with_model_kwargs(model_kwargs,
     except Exception as e:
         logging.info(f'Save text or video error. {e}')
 
-    trt_util_2.synchronize( torch_stream )
+    InferenceUtil.synchronize( torch_stream )
     nvtx.end_range(rng)
     logging.info(f'Save videos to {oss_key}')
 

@@ -3,7 +3,7 @@ import math
 
 from .losses import kl_divergence, discretized_gaussian_log_likelihood
 from .dpm_solver import NoiseScheduleVP, model_wrapper_guided_diffusion, model_wrapper, DPM_Solver
-import trt_util_2
+import InferenceUtil
 
 __all__ = ['GaussianDiffusion', 'beta_schedule', "GaussianDiffusion_style"]
 
@@ -147,11 +147,11 @@ class GaussianDiffusion(object):
             assert isinstance(model_kwargs, list) and len(model_kwargs) == 2
             rng = nvtx.start_range(message="0", color="blue")
             y_out = model(xt, self._scale_timesteps(t), **model_kwargs[0])
-            trt_util_2.synchronize( torch_stream )
+            InferenceUtil.synchronize( torch_stream )
             nvtx.end_range(rng)
             rng = nvtx.start_range(message="1", color="blue")
             u_out = model(xt, self._scale_timesteps(t), **model_kwargs[1])
-            trt_util_2.synchronize( torch_stream )
+            InferenceUtil.synchronize( torch_stream )
             nvtx.end_range(rng)
             dim = y_out.size(1) if self.var_type.startswith('fixed') else y_out.size(1) // 2
             out = torch.cat([
