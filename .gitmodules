@@ -1,0 +1,3 @@
+[submodule "VideoProcessingFramework"]
+	path = VideoProcessingFramework
+	url = https://github.com/NVIDIA/VideoProcessingFramework.git
